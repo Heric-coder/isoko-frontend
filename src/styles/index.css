@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply bg-surface text-ink font-body antialiased dark:bg-surface-dark dark:text-white;
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-display;
+  }
+
+  /* Visible keyboard focus everywhere — accessibility isn't optional */
+  :focus-visible {
+    @apply outline-none ring-2 ring-gold-500 ring-offset-2 ring-offset-surface dark:ring-offset-surface-dark;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-card px-4 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-indigo-700 text-white hover:bg-indigo-900;
+  }
+  .btn-accent {
+    @apply btn bg-gold-500 text-ink hover:bg-gold-700 hover:text-white;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-indigo-700 hover:bg-indigo-50 dark:text-indigo-100 dark:hover:bg-ink-soft;
+  }
+  .card {
+    @apply rounded-card border border-indigo-100 bg-white shadow-sm dark:border-ink-soft dark:bg-ink-soft;
+  }
+  .input {
+    @apply w-full rounded-card border border-indigo-100 bg-white px-3 py-2 text-sm text-ink placeholder:text-indigo-300 focus:border-indigo-500 dark:border-ink-soft dark:bg-ink dark:text-white;
+  }
+  .label {
+    @apply mb-1 block text-sm font-medium text-indigo-900 dark:text-indigo-100;
+  }
+  /* The accent rail — a category-colored bar keyed to Category.accent_color from the API.
+     Signature visual device: helps buyers scan categories at a glance, not decoration. */
+  .accent-rail {
+    border-left-width: 4px;
+  }
+}
