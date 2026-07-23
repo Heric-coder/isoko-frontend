@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { LanguageSwitcher } from './LanguageSwitcher'
 import { NotificationBell } from './NotificationBell'
@@ -17,6 +17,7 @@ export function Header() {
   const location = useLocation()
   const [search, setSearch] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
   const [searchWarning, setSearchWarning] = useState('')
 
   const handleSearch = (e: FormEvent) => {
@@ -36,6 +37,21 @@ export function Header() {
       window.location.reload()
     }
   }
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('touchstart', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('touchstart', handleClickOutside)
+    }
+  }, [menuOpen])
 
   return (
     <header className="sticky top-0 z-40 border-b border-indigo-100 bg-white/95 backdrop-blur dark:border-ink-soft dark:bg-ink/95">
@@ -78,7 +94,7 @@ export function Header() {
             )}
           </Link>
 
-          <div className="relative shrink-0">
+          <div className="relative shrink-0" ref={menuRef}>
   <button
     onClick={() => setMenuOpen((v) => !v)}
     className="btn-ghost !px-2 !py-1 max-w-full"
@@ -96,10 +112,7 @@ export function Header() {
   </button>
 
             {menuOpen && (
-              <div
-                className="card absolute right-0 top-10 w-52 p-2 text-sm"
-                onMouseLeave={() => setMenuOpen(false)}
-              >
+              <div className="card absolute right-0 top-10 w-52 p-2 text-sm">
                 {user ? (
                   <>
                     <Link to="/profile" className="block rounded px-3 py-2 hover:bg-indigo-50 dark:hover:bg-ink-soft">{t('nav_profile')}</Link>
