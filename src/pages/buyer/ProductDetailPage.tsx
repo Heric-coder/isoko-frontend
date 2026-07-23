@@ -1,5 +1,5 @@
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { productsApi } from '@/api/products'
 import { wishlistApi } from '@/api'
 import { PriceTag } from '@/components/PriceTag'
@@ -29,6 +29,15 @@ export default function ProductDetailPage() {
   const [isWishlisted, setIsWishlisted] = useState(false)
   const [wishlistItemId, setWishlistItemId] = useState<string | null>(null)
 
+  // Zoom modal state
+  const [isZoomOpen, setIsZoomOpen] = useState(false)
+  const [zoomScale, setZoomScale] = useState(1)
+  const [zoomOffset, setZoomOffset] = useState({ x: 0, y: 0 })
+  const dragState = useRef<{ dragging: boolean; startX: number; startY: number; offsetX: number; offsetY: number }>({
+    dragging: false, startX: 0, startY: 0, offsetX: 0, offsetY: 0,
+  })
+  const pinchState = useRef<{ startDistance: number; startScale: number } | null>(null)
+
   useEffect(() => {
     if (!id) return
     setIsLoading(true)
@@ -53,6 +62,93 @@ export default function ProductDetailPage() {
       }
     }).catch(() => {})
   }, [id, user])
+
+  // Lock page scroll while the zoom modal is open
+  useEffect(() => {
+    document.body.style.overflow = isZoomOpen ? 'hidden' : ''
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [isZoomOpen])
+
+  const resetZoom = () => {
+    setZoomScale(1)
+    setZoomOffset({ x: 0, y: 0 })
+  }
+
+  const openZoom = () => {
+    resetZoom()
+    setIsZoomOpen(true)
+  }
+
+  const closeZoom = () => {
+    setIsZoomOpen(false)
+    resetZoom()
+  }
+
+  const clampScale = (s: number) => Math.min(4, Math.max(1, s))
+
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault()
+    setZoomScale((prev) => {
+      const next = clampScale(prev - e.deltaY * 0.002)
+      if (next === 1) setZoomOffset({ x: 0, y: 0 })
+      return next
+    })
+  }
+
+  const distanceBetween = (t1: React.Touch, t2: React.Touch) =>
+    Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY)
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      pinchState.current = { startDistance: distanceBetween(e.touches[0], e.touches[1]), startScale: zoomScale }
+    } else if (e.touches.length === 1 && zoomScale > 1) {
+      dragState.current = {
+        dragging: true,
+        startX: e.touches[0].clientX,
+        startY: e.touches[0].clientY,
+        offsetX: zoomOffset.x,
+        offsetY: zoomOffset.y,
+      }
+    }
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && pinchState.current) {
+      e.preventDefault()
+      const newDistance = distanceBetween(e.touches[0], e.touches[1])
+      const scale = clampScale(pinchState.current.startScale * (newDistance / pinchState.current.startDistance))
+      setZoomScale(scale)
+      if (scale === 1) setZoomOffset({ x: 0, y: 0 })
+    } else if (e.touches.length === 1 && dragState.current.dragging) {
+      e.preventDefault()
+      const dx = e.touches[0].clientX - dragState.current.startX
+      const dy = e.touches[0].clientY - dragState.current.startY
+      setZoomOffset({ x: dragState.current.offsetX + dx, y: dragState.current.offsetY + dy })
+    }
+  }
+
+  const handleTouchEnd = () => {
+    pinchState.current = null
+    dragState.current.dragging = false
+  }
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (zoomScale <= 1) return
+    dragState.current = { dragging: true, startX: e.clientX, startY: e.clientY, offsetX: zoomOffset.x, offsetY: zoomOffset.y }
+  }
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!dragState.current.dragging) return
+    const dx = e.clientX - dragState.current.startX
+    const dy = e.clientY - dragState.current.startY
+    setZoomOffset({ x: dragState.current.offsetX + dx, y: dragState.current.offsetY + dy })
+  }
+
+  const handleMouseUp = () => {
+    dragState.current.dragging = false
+  }
 
   if (isLoading) return <Spinner label={t('loading')} />
   if (!product) return <p>Product not found.</p>
@@ -87,7 +183,20 @@ export default function ProductDetailPage() {
       <div>
         <div className="relative w-full overflow-hidden rounded-card bg-indigo-50 dark:bg-ink-soft" style={{ aspectRatio: '2/1' }}>
           {images[activeImage] && (
-            <img src={images[activeImage].image} alt={name} className="h-full w-full object-contain object-center" />
+            <button
+              type="button"
+              onClick={openZoom}
+              className="group h-full w-full cursor-zoom-in"
+              aria-label="Zoom image"
+            >
+              <img src={images[activeImage].image} alt={name} className="h-full w-full object-contain object-center" />
+              <span className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-black/50 p-1.5 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 8v6M8 11h6" />
+                </svg>
+              </span>
+            </button>
           )}
 
           {images.length > 1 && (
@@ -182,6 +291,55 @@ export default function ProductDetailPage() {
               <ProductCard key={p.id} product={p} />
             ))}
           </div>
+        </div>
+      )}
+
+      {isZoomOpen && images[activeImage] && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
+          role="dialog"
+          aria-modal="true"
+          onClick={closeZoom}
+        >
+          <button
+            type="button"
+            onClick={closeZoom}
+            aria-label="Close"
+            className="absolute right-4 top-4 z-10 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+          >
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+
+          <div
+            className="h-full w-full overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+            onWheel={handleWheel}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+          >
+            <img
+              src={images[activeImage].image}
+              alt={name}
+              draggable={false}
+              className="h-full w-full select-none object-contain"
+              style={{
+                transform: `translate(${zoomOffset.x}px, ${zoomOffset.y}px) scale(${zoomScale})`,
+                cursor: zoomScale > 1 ? 'grab' : 'default',
+                transition: dragState.current.dragging || pinchState.current ? 'none' : 'transform 0.1s ease-out',
+              }}
+            />
+          </div>
+
+          <p className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 text-xs text-white/60">
+            Scroll or pinch to zoom · drag to pan
+          </p>
         </div>
       )}
     </div>
