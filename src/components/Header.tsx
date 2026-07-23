@@ -40,7 +40,7 @@ export function Header() {
 
   useEffect(() => {
     if (!menuOpen) return
-    const handleClickOutside = (e: MouseEvent) => {
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuOpen(false)
       }
