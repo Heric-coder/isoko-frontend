@@ -30,7 +30,7 @@ export default function SellerApplyPage() {
       await sellersApi.apply({
         store_name: storeName,
         description,
-        phone: '+250${phone}',
+        phone: `+250${phone}`,
         national_id: idType === 'national_id' ? idValue : undefined,
         business_registration_number: idType === 'business' ? idValue : undefined,
         location: `${location.cell}, ${location.sector}, ${location.district}, ${location.province}`,
