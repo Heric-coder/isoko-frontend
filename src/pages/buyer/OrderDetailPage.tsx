@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import { ApiRequestError } from '@/api/client'
 import { ordersApi } from '@/api/orders'
 import { reviewsApi } from '@/api'
+import { LocationFields, type LocationValue } from '@/components/LocationFields'
+import { PhoneInput } from '@/components/PhoneInput'
 import { PriceTag } from '@/components/PriceTag'
 import { Spinner } from '@/components/Spinner'
 import { StarInput } from '@/components/StarInput'
@@ -77,15 +80,41 @@ export default function OrderDetailPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [cancelReason, setCancelReason] = useState<Record<string, string>>({})
 
+  const [isEditingAddress, setIsEditingAddress] = useState(false)
+  const [addressForm, setAddressForm] = useState({
+    delivery_full_name: '',
+    delivery_phone: '',
+    delivery_notes: '',
+  })
+  const [addressLocation, setAddressLocation] = useState<LocationValue>({ province: '', district: '', sector: '', cell: '' })
+  const [addressError, setAddressError] = useState('')
+  const [addressSaving, setAddressSaving] = useState(false)
+  const [addressSaved, setAddressSaved] = useState(false)
+
   const load = () => {
     if (!id) return
-    ordersApi.orderDetail(id).then(setOrder).finally(() => setIsLoading(false))
+    ordersApi.orderDetail(id).then((o) => {
+      setOrder(o)
+      setAddressForm({
+        delivery_full_name: o.delivery_full_name,
+        delivery_phone: o.delivery_phone,
+        delivery_notes: o.delivery_notes || '',
+      })
+      setAddressLocation({
+        province: o.delivery_province,
+        district: o.delivery_district,
+        sector: o.delivery_sector,
+        cell: o.delivery_cell,
+      })
+    }).finally(() => setIsLoading(false))
   }
 
   useEffect(load, [id])
 
   if (isLoading) return <Spinner label={t('loading')} />
   if (!order) return <p>Order not found.</p>
+
+  const canEditOrCancel = order.sub_orders.every((so) => so.status === 'awaiting_payment')
 
   const handleConfirm = async (subOrderId: string) => {
     await ordersApi.confirmDelivery(subOrderId)
@@ -99,16 +128,93 @@ export default function OrderDetailPage() {
     load()
   }
 
+  const handleSaveAddress = async () => {
+    setAddressError('')
+    setAddressSaving(true)
+    try {
+      await ordersApi.updateDeliveryAddress(order.id, {
+        ...addressForm,
+        delivery_province: addressLocation.province,
+        delivery_district: addressLocation.district,
+        delivery_sector: addressLocation.sector,
+        delivery_cell: addressLocation.cell,
+      })
+      setIsEditingAddress(false)
+      setAddressSaved(true)
+      setTimeout(() => setAddressSaved(false), 2500)
+      load()
+    } catch (err) {
+      setAddressError(err instanceof ApiRequestError ? err.detail : 'Failed to update delivery details.')
+    } finally {
+      setAddressSaving(false)
+    }
+  }
+
   return (
     <div>
       <h1 className="mb-1 text-xl font-bold">Order #{order.id.slice(0, 8)}</h1>
       <p className="mb-6 text-sm text-indigo-500">{new Date(order.created_at).toLocaleString()}</p>
 
       <div className="mb-6 card p-4 text-sm">
-        <h2 className="mb-2 font-semibold">{t('checkout_delivery_details')}</h2>
-        <p>{order.delivery_full_name} — {order.delivery_phone}</p>
-        <p>{order.delivery_sector}, {order.delivery_district}, {order.delivery_province}</p>
-        {order.delivery_notes && <p className="text-indigo-500">{order.delivery_notes}</p>}
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="font-semibold">{t('checkout_delivery_details')}</h2>
+          {canEditOrCancel && !isEditingAddress && (
+            <button onClick={() => setIsEditingAddress(true)} className="text-xs text-indigo-500 hover:underline">
+              Edit
+            </button>
+          )}
+        </div>
+
+        {isEditingAddress ? (
+          <div className="space-y-3">
+            <div>
+              <label className="label">{t('checkout_full_name')}</label>
+              <input
+                className="input"
+                value={addressForm.delivery_full_name}
+                onChange={(e) => setAddressForm((p) => ({ ...p, delivery_full_name: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="label">{t('checkout_phone')}</label>
+              <PhoneInput
+                value={addressForm.delivery_phone.replace(/^\+250/, '')}
+                onChange={(v) => setAddressForm((p) => ({ ...p, delivery_phone: `+250${v}` }))}
+              />
+            </div>
+            <LocationFields value={addressLocation} onChange={setAddressLocation} />
+            <div>
+              <label className="label">{t('checkout_notes')}</label>
+              <textarea
+                className="input"
+                rows={2}
+                value={addressForm.delivery_notes}
+                onChange={(e) => setAddressForm((p) => ({ ...p, delivery_notes: e.target.value }))}
+              />
+            </div>
+            {addressError && <p className="text-sm text-clay-500">{addressError}</p>}
+            <div className="flex gap-2">
+              <button onClick={handleSaveAddress} disabled={addressSaving} className="btn-primary !px-3 !py-1.5 text-xs">
+                {addressSaving ? 'Saving…' : 'Save changes'}
+              </button>
+              <button onClick={() => setIsEditingAddress(false)} className="btn-ghost !px-3 !py-1.5 text-xs">
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <p>{order.delivery_full_name} — {order.delivery_phone}</p>
+            <p>{order.delivery_sector}, {order.delivery_district}, {order.delivery_province}</p>
+            {order.delivery_notes && <p className="text-indigo-500">{order.delivery_notes}</p>}
+            {addressSaved && <p className="mt-1 text-xs text-leaf-500">Delivery details updated.</p>}
+            {!canEditOrCancel && (
+              <p className="mt-2 text-xs text-indigo-400">
+                Delivery details can no longer be edited — at least one seller has already started processing this order.
+              </p>
+            )}
+          </>
+        )}
       </div>
 
       <div className="space-y-4">
@@ -141,7 +247,7 @@ export default function OrderDetailPage() {
 
             {so.status === 'completed' && <SubOrderReviews subOrder={so} />}
 
-            {!['completed', 'cancelled', 'cancellation_requested'].includes(so.status) && (
+            {so.status === 'awaiting_payment' && (
               <div className="mt-3 flex gap-2">
                 <input
                   className="input"
@@ -153,6 +259,12 @@ export default function OrderDetailPage() {
                   {t('order_status_request_cancel')}
                 </button>
               </div>
+            )}
+
+            {!['awaiting_payment', 'completed', 'cancelled', 'cancellation_requested'].includes(so.status) && (
+              <p className="mt-3 text-xs text-indigo-400">
+                This order can no longer be cancelled — the seller has already started processing it.
+              </p>
             )}
           </div>
         ))}

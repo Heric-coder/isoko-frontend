@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useParams } from 'react-router-dom'
 import { ordersApi } from '@/api/orders'
 import { PriceTag } from '@/components/PriceTag'
 import { Spinner } from '@/components/Spinner'
 import type { SubOrder } from '@/types'
 
 const STATUS_FLOW: Record<string, string[]> = {
-  awaiting_payment: [],
+  awaiting_payment: ['queued'],
+  queued: ['confirmed'],
   confirmed: ['preparing'],
   preparing: ['shipped', 'ready_for_pickup'],
   shipped: ['delivered'],
@@ -17,6 +19,8 @@ const STATUS_FLOW: Record<string, string[]> = {
 }
 
 const STATUS_LABELS: Record<string, string> = {
+  queued: 'Add to queue',
+  confirmed: 'Mark as confirmed',
   preparing: 'Mark as preparing',
   shipped: 'Mark as shipped',
   ready_for_pickup: 'Mark as ready for pickup',
@@ -24,16 +28,28 @@ const STATUS_LABELS: Record<string, string> = {
 }
 
 export default function SellerOrdersPage() {
+  const { id: highlightId } = useParams<{ id: string }>()
   const [subOrders, setSubOrders] = useState<SubOrder[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const highlightRef = useRef<HTMLDivElement>(null)
 
   const load = () => {
     ordersApi.mySubOrders().then((res) => setSubOrders(res.results)).finally(() => setIsLoading(false))
   }
   useEffect(load, [])
 
+  useEffect(() => {
+    if (!isLoading && highlightId && highlightRef.current) {
+      highlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [isLoading, highlightId])
+
   const advance = async (id: string, status: string) => {
-    await ordersApi.updateSubOrderStatus(id, status)
+    if (status === 'queued') {
+      await ordersApi.markQueued(id)
+    } else {
+      await ordersApi.updateSubOrderStatus(id, status)
+    }
     load()
   }
 
@@ -50,7 +66,11 @@ export default function SellerOrdersPage() {
 
       <div className="space-y-3">
         {subOrders.map((so) => (
-          <div key={so.id} className="card p-4">
+          <div
+            key={so.id}
+            ref={so.id === highlightId ? highlightRef : null}
+            className={`card p-4 ${so.id === highlightId ? 'ring-2 ring-gold-500' : ''}`}
+          >
             <div className="mb-2 flex items-center justify-between">
               <p className="text-sm font-medium">Order #{so.order.slice(0, 8)}</p>
               <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs capitalize text-indigo-700 dark:bg-ink-soft dark:text-indigo-100">

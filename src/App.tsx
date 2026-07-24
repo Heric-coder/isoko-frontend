@@ -73,6 +73,7 @@ export function AppRoutes() {
   <Route path="/seller/products/new" element={<SellerProductFormPage />} />
   <Route path="/seller/products/:id/edit" element={<SellerProductFormPage />} />
   <Route path="/seller/orders" element={<SellerOrdersPage />} />
+  <Route path="/seller/orders/:id" element={<SellerOrdersPage />} />
   <Route path="/seller/profile" element={<SellerProfilePage />} />
 </Route>
 

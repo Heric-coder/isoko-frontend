@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { notificationsApi } from '@/api'
 import { useAuth } from '@/context/AuthContext'
 
@@ -7,12 +8,14 @@ interface Notification {
   type: string
   title: string
   message: string
+  target_url: string
   is_read: boolean
   created_at: string
 }
 
 export function NotificationBell() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [open, setOpen] = useState(false)
 
@@ -23,7 +26,6 @@ export function NotificationBell() {
   useEffect(() => {
     if (!user) return
     load()
-    // Simple polling — fine for a lightweight app; swap for websockets later if needed.
     const interval = setInterval(load, 60000)
     return () => clearInterval(interval)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -41,6 +43,11 @@ export function NotificationBell() {
     }
   }
 
+  const handleNotificationClick = (n: Notification) => {
+    setOpen(false)
+    if (n.target_url) navigate(n.target_url)
+  }
+
   return (
     <div className="relative">
       <button onClick={handleOpen} aria-label="Notifications" className="relative text-indigo-500 hover:text-indigo-900 dark:text-indigo-100">
@@ -56,10 +63,15 @@ export function NotificationBell() {
         <div className="card absolute right-0 top-10 max-h-96 w-72 overflow-y-auto p-2 text-sm" onMouseLeave={() => setOpen(false)}>
           {notifications.length === 0 && <p className="p-3 text-indigo-500">No notifications yet.</p>}
           {notifications.map((n) => (
-            <div key={n.id} className={`rounded p-2 ${n.is_read ? '' : 'bg-indigo-50 dark:bg-ink-soft'}`}>
+            <button
+              key={n.id}
+              onClick={() => handleNotificationClick(n)}
+              disabled={!n.target_url}
+              className={`block w-full rounded p-2 text-left transition-colors ${n.is_read ? '' : 'bg-indigo-50 dark:bg-ink-soft'} ${n.target_url ? 'hover:bg-indigo-100 dark:hover:bg-ink cursor-pointer' : 'cursor-default'}`}
+            >
               <p className="font-medium">{n.title}</p>
               <p className="text-xs text-indigo-500">{n.message}</p>
-            </div>
+            </button>
           ))}
         </div>
       )}

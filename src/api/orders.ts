@@ -14,14 +14,27 @@ export interface CheckoutPayload {
   promo_code?: string
 }
 
+export interface DeliveryAddressPayload {
+  delivery_full_name?: string
+  delivery_phone?: string
+  delivery_province?: string
+  delivery_district?: string
+  delivery_sector?: string
+  delivery_cell?: string
+  delivery_notes?: string
+}
+
 export const ordersApi = {
   checkout: (payload: CheckoutPayload) => api.post<Order>('/orders/checkout/', payload),
   myOrders: () => api.get<PaginatedResponse<Order>>('/orders/'),
   orderDetail: (id: string) => api.get<Order>(`/orders/${id}/`),
+  updateDeliveryAddress: (id: string, payload: DeliveryAddressPayload) =>
+    api.patch<Order>(`/orders/${id}/update_delivery_address/`, payload),
 
   mySubOrders: () => api.get<PaginatedResponse<SubOrder>>('/orders/sub-orders/'),
   updateSubOrderStatus: (id: string, status: string) =>
     api.patch<SubOrder>(`/orders/sub-orders/${id}/update_status/`, { status }),
+  markQueued: (id: string) => api.patch<SubOrder>(`/orders/sub-orders/${id}/mark_queued/`),
   confirmDelivery: (id: string) => api.post<SubOrder>(`/orders/sub-orders/${id}/confirm_delivery/`),
   requestCancellation: (id: string, reason: string) =>
     api.post<SubOrder>(`/orders/sub-orders/${id}/request_cancellation/`, { reason }),

@@ -22,6 +22,7 @@ export default function CheckoutPage() {
   const [momoPhone, setMomoPhone] = useState('')
   const [promoCode, setPromoCode] = useState('')
   const [promoPreview, setPromoPreview] = useState<number | null>(null)
+  const [acknowledgedCutoff, setAcknowledgedCutoff] = useState(false)
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -42,6 +43,12 @@ export default function CheckoutPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError('')
+
+    if (!acknowledgedCutoff) {
+      setError('Please confirm you understand the cancellation and editing policy before placing your order.')
+      return
+    }
+
     setIsSubmitting(true)
     try {
       const order = await ordersApi.checkout({
@@ -125,6 +132,19 @@ export default function CheckoutPage() {
           <span>{t('cart_subtotal')}</span>
           <PriceTag price={cart.total} />
         </div>
+
+        <label className="flex items-start gap-2 text-xs text-indigo-500">
+          <input
+            type="checkbox"
+            checked={acknowledgedCutoff}
+            onChange={(e) => setAcknowledgedCutoff(e.target.checked)}
+            className="mt-0.5"
+            required
+          />
+          <span>
+            I understand that once the seller queues my order, I won't be able to cancel it or edit the delivery address.
+          </span>
+        </label>
 
         {error && <p className="text-sm text-clay-500">{error}</p>}
 
