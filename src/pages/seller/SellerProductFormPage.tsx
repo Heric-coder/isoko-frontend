@@ -29,6 +29,8 @@ export default function SellerProductFormPage() {
   const [form, setForm] = useState(emptyForm)
   const [originalForm, setOriginalForm] = useState(emptyForm)
   const [images, setImages] = useState<ProductImage[]>([])
+  const [originalImageIds, setOriginalImageIds] = useState<string[]>([])
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([])
   const [newProductPhoto, setNewProductPhoto] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadMessage, setUploadMessage] = useState('')
@@ -36,6 +38,7 @@ export default function SellerProductFormPage() {
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(isEditing)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     productsApi.categories().then(setCategories)
@@ -61,19 +64,29 @@ export default function SellerProductFormPage() {
       setForm(loaded)
       setOriginalForm(loaded)
       setImages(p.images)
+      setOriginalImageIds(p.images.map((img) => img.id))
       setIsLoading(false)
     })
   }, [id])
 
   const update = (key: keyof typeof form, value: string) => setForm((prev) => ({ ...prev, [key]: value }))
 
+  const visibleImages = images.filter((img) => !pendingDeleteIds.includes(img.id))
+
+  const imagesChanged = () => {
+    if (pendingDeleteIds.length > 0) return true
+    const currentIds = images.map((img) => img.id)
+    if (currentIds.length !== originalImageIds.length) return true
+    return currentIds.some((imgId) => !originalImageIds.includes(imgId))
+  }
+
   const handleAddImage = async (file: File) => {
     if (!id) return
     setIsUploading(true)
     setUploadMessage('')
     try {
-      const uploaded = await productsApi.uploadImage(id, file, images.length === 0)
-      setImages((prev) => [...prev, { id: uploaded.id, image: uploaded.image, is_main: images.length === 0, sort_order: prev.length, variant: null }])
+      const uploaded = await productsApi.uploadImage(id, file, visibleImages.length === 0)
+      setImages((prev) => [...prev, { id: uploaded.id, image: uploaded.image, is_main: visibleImages.length === 0, sort_order: prev.length, variant: null }])
       setUploadMessage('Photo uploaded.')
       setTimeout(() => setUploadMessage(''), 2500)
     } catch {
@@ -83,7 +96,17 @@ export default function SellerProductFormPage() {
     }
   }
 
-  const handleRemoveImage = async (imageId: string) => {
+  const handleRemoveImage = (imageId: string) => {
+    if (visibleImages.length <= 1) {
+      if (!confirm('This is the last photo. It will only be removed once you add a replacement photo and save changes. Continue?')) return
+      setPendingDeleteIds((prev) => [...prev, imageId])
+      setUploadMessage('Marked for removal — add a replacement photo and save changes to confirm.')
+      return
+    }
+    removeImageNow(imageId)
+  }
+
+  const removeImageNow = async (imageId: string) => {
     if (!id) return
     if (!confirm('Remove this photo?')) return
     try {
@@ -96,18 +119,40 @@ export default function SellerProductFormPage() {
     }
   }
 
+  const handleUndoRemove = (imageId: string) => {
+    setPendingDeleteIds((prev) => prev.filter((pid) => pid !== imageId))
+  }
+
+  const handleDeleteProduct = async () => {
+    if (!id) return
+    if (!confirm('Delete this product permanently? This cannot be undone.')) return
+    setIsDeleting(true)
+    try {
+      await productsApi.remove(id)
+      navigate('/seller/products')
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.detail : 'Failed to delete product. Please try again.')
+      setIsDeleting(false)
+    }
+  }
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError('')
     setSaveMessage('')
 
-    if (isEditing && JSON.stringify(form) === JSON.stringify(originalForm)) {
-      setSaveMessage('No changes to save.')
+    if (!isEditing && !newProductPhoto) {
+      setError('Please add a product photo before submitting.')
       return
     }
 
-    if (!isEditing && !newProductPhoto) {
-      setError('Please add a product photo before submitting.')
+    if (isEditing && pendingDeleteIds.length > 0 && visibleImages.length === 0) {
+      setError('Add a replacement photo before saving — a product must have at least one photo.')
+      return
+    }
+
+    if (isEditing && JSON.stringify(form) === JSON.stringify(originalForm) && !imagesChanged()) {
+      setSaveMessage('No changes to save.')
       return
     }
 
@@ -120,6 +165,17 @@ export default function SellerProductFormPage() {
       }
       if (isEditing && id) {
         await productsApi.update(id, payload)
+        if (pendingDeleteIds.length > 0) {
+          for (const imgId of pendingDeleteIds) {
+            try {
+              await productsApi.deleteImage(id, imgId)
+            } catch {
+              // continue attempting remaining deletions even if one fails
+            }
+          }
+          setImages((prev) => prev.filter((img) => !pendingDeleteIds.includes(img.id)))
+          setPendingDeleteIds([])
+        }
       } else {
         const created = await productsApi.create(payload)
         if (newProductPhoto) {
@@ -220,23 +276,42 @@ export default function SellerProductFormPage() {
             <label className="label">Product photos</label>
             {images.length > 0 && (
               <div className="mb-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
-                {images.map((img) => (
-                  <div key={img.id} className="group relative aspect-square overflow-hidden rounded-md border border-indigo-100 dark:border-ink-soft">
-                    <img src={img.image} alt="" className="h-full w-full object-cover" />
-                    {img.is_main && (
-                      <span className="absolute left-1 top-1 rounded bg-gold-500 px-1.5 py-0.5 text-[10px] font-semibold text-ink">Main</span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveImage(img.id)}
-                      className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100"
-                      aria-label="Remove photo"
+                {images.map((img) => {
+                  const isPending = pendingDeleteIds.includes(img.id)
+                  return (
+                    <div
+                      key={img.id}
+                      className={`group relative aspect-square overflow-hidden rounded-md border border-indigo-100 dark:border-ink-soft ${isPending ? 'opacity-40' : ''}`}
                     >
-                      ✕
-                    </button>
-                  </div>
-                ))}
+                      <img src={img.image} alt="" className="h-full w-full object-cover" />
+                      {img.is_main && !isPending && (
+                        <span className="absolute left-1 top-1 rounded bg-gold-500 px-1.5 py-0.5 text-[10px] font-semibold text-ink">Main</span>
+                      )}
+                      {isPending ? (
+                        <button
+                          type="button"
+                          onClick={() => handleUndoRemove(img.id)}
+                          className="absolute inset-x-0 bottom-0 bg-black/70 py-1 text-[10px] font-semibold text-white"
+                        >
+                          Undo removal
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage(img.id)}
+                          className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100"
+                          aria-label="Remove photo"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
+            )}
+            {pendingDeleteIds.length > 0 && visibleImages.length === 0 && (
+              <p className="mb-2 text-xs text-clay-500">Add a replacement photo before saving — this product must keep at least one photo.</p>
             )}
             <input
               type="file"
@@ -281,6 +356,17 @@ export default function SellerProductFormPage() {
         <button type="submit" disabled={isSubmitting} className="btn-accent w-full">
           {isSubmitting ? 'Saving…' : isEditing ? 'Save changes' : 'Create product'}
         </button>
+
+        {isEditing && id && (
+          <button
+            type="button"
+            onClick={handleDeleteProduct}
+            disabled={isDeleting}
+            className="w-full rounded-md border border-clay-500 py-2 text-sm font-medium text-clay-500 transition-colors hover:bg-clay-500 hover:text-white disabled:opacity-50"
+          >
+            {isDeleting ? 'Deleting…' : 'Delete product'}
+          </button>
+        )}
       </form>
     </div>
   )
