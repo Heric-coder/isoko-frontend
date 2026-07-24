@@ -106,6 +106,11 @@ export default function SellerProductFormPage() {
       return
     }
 
+    if (!isEditing && !newProductPhoto) {
+      setError('Please add a product photo before submitting.')
+      return
+    }
+
     setIsSubmitting(true)
     try {
       const payload = {
@@ -249,7 +254,7 @@ export default function SellerProductFormPage() {
           </div>
         ) : (
           <div>
-            <label className="label">Product photo (optional)</label>
+            <label className="label">Product photo (required)</label>
             {newProductPhoto && (
               <div className="mb-3 aspect-square w-32 overflow-hidden rounded-md border border-indigo-100 dark:border-ink-soft">
                 <img src={URL.createObjectURL(newProductPhoto)} alt="" className="h-full w-full object-cover" />
@@ -258,6 +263,7 @@ export default function SellerProductFormPage() {
             <input
               type="file"
               accept="image/*"
+              required
               onChange={(e) => setNewProductPhoto(e.target.files?.[0] || null)}
             />
           </div>
