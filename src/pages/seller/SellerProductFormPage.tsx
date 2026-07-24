@@ -29,6 +29,7 @@ export default function SellerProductFormPage() {
   const [form, setForm] = useState(emptyForm)
   const [originalForm, setOriginalForm] = useState(emptyForm)
   const [images, setImages] = useState<ProductImage[]>([])
+  const [newProductPhoto, setNewProductPhoto] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadMessage, setUploadMessage] = useState('')
   const [saveMessage, setSaveMessage] = useState('')
@@ -115,7 +116,14 @@ export default function SellerProductFormPage() {
       if (isEditing && id) {
         await productsApi.update(id, payload)
       } else {
-        await productsApi.create(payload)
+        const created = await productsApi.create(payload)
+        if (newProductPhoto) {
+          try {
+            await productsApi.uploadImage(created.id, newProductPhoto, true)
+          } catch {
+            setError('Product created, but the photo failed to upload. You can add it from the edit page.')
+          }
+        }
       }
       setSaveMessage(isEditing ? 'Changes saved.' : 'Product created.')
       setTimeout(() => navigate('/seller/products'), 900)
@@ -202,7 +210,7 @@ export default function SellerProductFormPage() {
           </div>
         </div>
 
-        {isEditing && id && (
+        {isEditing && id ? (
           <div>
             <label className="label">Product photos</label>
             {images.length > 0 && (
@@ -239,11 +247,27 @@ export default function SellerProductFormPage() {
             {isUploading && <p className="mt-1 text-xs text-indigo-400">Uploading…</p>}
             {uploadMessage && <p className="mt-1 text-xs text-leaf-500">{uploadMessage}</p>}
           </div>
+        ) : (
+          <div>
+            <label className="label">Product photo (optional)</label>
+            {newProductPhoto && (
+              <div className="mb-3 aspect-square w-32 overflow-hidden rounded-md border border-indigo-100 dark:border-ink-soft">
+                <img src={URL.createObjectURL(newProductPhoto)} alt="" className="h-full w-full object-cover" />
+              </div>
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setNewProductPhoto(e.target.files?.[0] || null)}
+            />
+          </div>
         )}
 
-        <p className="text-xs text-indigo-400">
-          Photos are uploaded from the product management screen after saving — image uploads use a separate endpoint to keep this form fast.
-        </p>
+        {isEditing && (
+          <p className="text-xs text-indigo-400">
+            Additional photos can be added from this page any time.
+          </p>
+        )}
 
         {error && <p className="text-sm text-clay-500">{error}</p>}
         {saveMessage && <p className="text-sm text-leaf-500">{saveMessage}</p>}
