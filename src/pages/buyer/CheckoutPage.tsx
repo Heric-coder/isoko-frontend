@@ -46,14 +46,14 @@ export default function CheckoutPage() {
     try {
       const order = await ordersApi.checkout({
         delivery_full_name: fullName,
-        delivery_phone: '+250${phone}',
+        delivery_phone: `+250${phone}`,
         delivery_province: location.province,
         delivery_district: location.district,
         delivery_sector: location.sector,
         delivery_cell: location.cell,
         delivery_notes: notes,
         payment_method: paymentMethod,
-        momo_phone: paymentMethod !== 'cod' ? '+250${momoPhone}' : undefined,
+        momo_phone: paymentMethod !== 'cod' ? `+250${momoPhone}` : undefined,
         promo_code: promoCode || undefined,
       })
       await refreshCart()
@@ -76,9 +76,9 @@ export default function CheckoutPage() {
               <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
             </div>
             <div>
-  <label className="label">{t('checkout_phone')}</label>
-  <PhoneInput value={phone} onChange={setPhone} required />
-</div>
+              <label className="label">{t('checkout_phone')}</label>
+              <PhoneInput value={phone} onChange={setPhone} required />
+            </div>
             <LocationFields value={location} onChange={setLocation} />
             <div>
               <label className="label">{t('checkout_notes')}</label>
@@ -102,10 +102,10 @@ export default function CheckoutPage() {
               </label>
             ))}
             {paymentMethod !== 'cod' && (
-  <div className="mt-2">
-    <PhoneInput value={momoPhone} onChange={setMomoPhone} required />
-  </div>
-)}
+              <div className="mt-2">
+                <PhoneInput value={momoPhone} onChange={setMomoPhone} required />
+              </div>
+            )}
           </div>
         </div>
       </div>
